@@ -1,0 +1,21 @@
+[project]
+name = "qwen-coder-switch"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "rich>=14.2.0",
+    "typer>=0.20.0",
+    "types-pyyaml>=6.0.12.20250915",
+    "types-requests>=2.32.4.20250913",
+]
+
+[project.scripts]
+qwen-switch = "qwen_coder_switch.cli:app"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
