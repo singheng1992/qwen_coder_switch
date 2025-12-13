@@ -18,7 +18,7 @@ def check_and_clean_keys(config_path: Path) -> Tuple[Dict, List[Dict]]:
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
-    valid_keys = {}
+    valid_provider_configs = {}
     invalid_keys = []
     key_stats = []
     modified = False
@@ -31,47 +31,63 @@ def check_and_clean_keys(config_path: Path) -> Tuple[Dict, List[Dict]]:
         console=console,
     ) as progress:
         
-        for provider_name, api_keys in config["provider"].items():
-            valid_keys[provider_name] = []
-            
-            for api_key in api_keys:
-                task = progress.add_task(f"检查 {provider_name} 密钥...", total=None)
+        if "provider" in config:
+            for provider_name, provider_config in config["provider"].items():
+                # Make sure provider_config follows the expected structure (validated elsewhere but good to be safe)
+                if not isinstance(provider_config, dict):
+                    continue
+
+                api_keys = provider_config.get("api_keys", [])
+                balance_url = provider_config.get("balance_url")
+                balance_field = provider_config.get("balance_field")
+                base_url = provider_config.get("base_url")
+
+                valid_keys_for_provider = []
                 
-                balance = check_api_key_balance(provider_name, api_key)
+                for api_key in api_keys:
+                    task = progress.add_task(f"检查 {provider_name} 密钥...", total=None)
+                    
+                    balance = check_api_key_balance(provider_name, api_key, balance_url, balance_field)
+                    
+                    if balance is None:
+                        console.print(f"[red]✗[/red] {provider_name}: {api_key[:15]}... - 无效或异常")
+                        invalid_keys.append((provider_name, api_key))
+                        modified = True
+                    elif balance <= 0:
+                        console.print(f"[yellow]✗[/yellow] {provider_name}: {api_key[:15]}... - 余额不足 (¥{balance})")
+                        invalid_keys.append((provider_name, api_key))
+                        modified = True
+                    else:
+                        console.print(f"[green]✓[/green] {provider_name}: {api_key[:15]}... - 余额充足 (¥{balance})")
+                        valid_keys_for_provider.append(api_key)
+                        key_stats.append({
+                            "provider": provider_name,
+                            "key": api_key,
+                            "balance": balance,
+                            "base_url": base_url
+                        })
+                    
+                    progress.remove_task(task)
                 
-                if balance is None:
-                    console.print(f"[red]✗[/red] {provider_name}: {api_key[:15]}... - 无效或异常")
-                    invalid_keys.append((provider_name, api_key))
+                # Only keep providers that have valid keys
+                if valid_keys_for_provider:
+                    new_provider_config = provider_config.copy()
+                    new_provider_config["api_keys"] = valid_keys_for_provider
+                    valid_provider_configs[provider_name] = new_provider_config
+                elif api_keys: # If it had keys but all were invalid
                     modified = True
-                elif balance <= 0:
-                    console.print(f"[yellow]✗[/yellow] {provider_name}: {api_key[:15]}... - 余额不足 (¥{balance})")
-                    invalid_keys.append((provider_name, api_key))
-                    modified = True
-                else:
-                    console.print(f"[green]✓[/green] {provider_name}: {api_key[:15]}... - 余额充足 (¥{balance})")
-                    valid_keys[provider_name].append(api_key)
-                    key_stats.append({
-                        "provider": provider_name,
-                        "key": api_key,
-                        "balance": balance
-                    })
-                
-                progress.remove_task(task)
     
     # 如果有修改，备份并保存新配置
     if modified:
         backup_config_file(config_path)
         
-        # 移除空的供应商
-        valid_keys = {k: v for k, v in valid_keys.items() if v}
-        
-        new_config = {"provider": valid_keys}
+        new_config = {"provider": valid_provider_configs}
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(new_config, f, default_flow_style=False, allow_unicode=True)
         
         console.print(f"\n[green]✓[/green] 已清理 {len(invalid_keys)} 个无效密钥")
     
-    return (new_config if modified else config), key_stats
+    return ({"provider": valid_provider_configs} if modified else config), key_stats
 
 
 def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None:
@@ -88,6 +104,7 @@ def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None
     selected_provider = best_key_info["provider"]
     selected_key = best_key_info["key"]
     max_balance = best_key_info["balance"]
+    base_url = best_key_info.get("base_url", "")
     
     console.print(Panel(
         f"自动选择余额最高的密钥:\n"
@@ -98,37 +115,37 @@ def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None
         border_style="green"
     ))
     
-    # 获取 baseUrl
-    base_url = "https://api.siliconflow.cn/"
-    if selected_provider == "siliconflow":
-        base_url = "https://api.siliconflow.cn/"
-    # 根据需要添加其他供应商的 base URL
-    
+    if not base_url:
+        console.print(f"[yellow]⚠[/yellow] 警告: 未找到 {selected_provider} 的 base_url 配置，可能无法正常工作")
+
     # 读取并更新 Qwen 配置
     qwen_config_path.parent.mkdir(parents=True, exist_ok=True)
     
     if qwen_config_path.exists():
         with open(qwen_config_path, 'r', encoding='utf-8') as f:
-            qwen_config = json.load(f)
+            try:
+                qwen_config = json.load(f)
+            except json.JSONDecodeError:
+                 qwen_config = {}
     else:
-        qwen_config = {
-            "$version": 2,
-            "security": {
-                "auth": {
-                    "selectedType": "openai"
-                }
-            },
-            "model": {
-                "name": "zai-org/GLM-4.6"
-            }
-        }
-    
+        qwen_config = {}
+
+    # Ensure structure exists
+    if "$version" not in qwen_config:
+        qwen_config["$version"] = 2
+    if "security" not in qwen_config:
+        qwen_config["security"] = {}
+    if "auth" not in qwen_config["security"]:
+        qwen_config["security"]["auth"] = {}
+    if "model" not in qwen_config:
+        qwen_config["model"] = {"name": ""}
+
     # 更新密钥
+    qwen_config["security"]["auth"]["selectedType"] = "openai" # Force openai compatible type usually
     qwen_config["security"]["auth"]["apiKey"] = selected_key
     qwen_config["security"]["auth"]["baseUrl"] = base_url
     
     # 保存配置
-    
     with open(qwen_config_path, 'w', encoding='utf-8') as f:
         json.dump(qwen_config, f, indent=2, ensure_ascii=False)
     
