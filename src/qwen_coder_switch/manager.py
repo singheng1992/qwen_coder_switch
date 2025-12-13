@@ -127,9 +127,7 @@ def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None
     qwen_config["security"]["auth"]["apiKey"] = selected_key
     qwen_config["security"]["auth"]["baseUrl"] = base_url
     
-    # 备份并保存
-    if qwen_config_path.exists():
-        backup_config_file(qwen_config_path)
+    # 保存配置
     
     with open(qwen_config_path, 'w', encoding='utf-8') as f:
         json.dump(qwen_config, f, indent=2, ensure_ascii=False)
