@@ -2,8 +2,9 @@ import json
 import yaml
 import typer
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
@@ -12,13 +13,14 @@ from .config import backup_config_file
 
 console = Console()
 
-def check_and_clean_keys(config_path: Path) -> Dict:
+def check_and_clean_keys(config_path: Path) -> Tuple[Dict, List[Dict]]:
     """检查所有密钥额度并清理无效密钥"""
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
     valid_keys = {}
     invalid_keys = []
+    key_stats = []
     modified = False
     
     console.print("\n[bold cyan]检查 API 密钥余额...[/bold cyan]")
@@ -48,6 +50,11 @@ def check_and_clean_keys(config_path: Path) -> Dict:
                 else:
                     console.print(f"[green]✓[/green] {provider_name}: {api_key[:15]}... - 余额充足 (¥{balance})")
                     valid_keys[provider_name].append(api_key)
+                    key_stats.append({
+                        "provider": provider_name,
+                        "key": api_key,
+                        "balance": balance
+                    })
                 
                 progress.remove_task(task)
     
@@ -64,41 +71,32 @@ def check_and_clean_keys(config_path: Path) -> Dict:
         
         console.print(f"\n[green]✓[/green] 已清理 {len(invalid_keys)} 个无效密钥")
     
-    return new_config if modified else config
+    return (new_config if modified else config), key_stats
 
 
-def select_and_switch_key(provider_config: Dict, qwen_config_path: Path) -> None:
-    """选择一个有效的 API 密钥并切换到 Qwen 配置"""
-    providers = provider_config.get("provider", {})
-    
-    if not providers:
+def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None:
+    """自动选择余额最高的密钥并切换到 Qwen 配置"""
+    if not key_stats:
         console.print("[red]✗[/red] 没有可用的 API 密钥")
         raise typer.Exit(1)
     
-    # 创建密钥选择表格
-    table = Table(title="可用的 API 密钥")
-    table.add_column("序号", style="cyan", justify="center")
-    table.add_column("供应商", style="magenta")
-    table.add_column("API 密钥", style="green")
+    # 按余额降序排序
+    key_stats.sort(key=lambda x: x["balance"], reverse=True)
     
-    all_keys = []
-    idx = 1
-    for provider_name, api_keys in providers.items():
-        for api_key in api_keys:
-            all_keys.append((provider_name, api_key))
-            table.add_row(str(idx), provider_name, f"{api_key[:15]}...{api_key[-5:]}")
-            idx += 1
+    # 选择余额最高的
+    best_key_info = key_stats[0]
+    selected_provider = best_key_info["provider"]
+    selected_key = best_key_info["key"]
+    max_balance = best_key_info["balance"]
     
-    console.print(table)
-    
-    # 选择密钥
-    choice = typer.prompt("\n请选择要使用的密钥序号", type=int)
-    
-    if choice < 1 or choice > len(all_keys):
-        console.print("[red]✗[/red] 无效的选择")
-        raise typer.Exit(1)
-    
-    selected_provider, selected_key = all_keys[choice - 1]
+    console.print(Panel(
+        f"自动选择余额最高的密钥:\n"
+        f"供应商: [bold magenta]{selected_provider}[/bold magenta]\n"
+        f"余额: [bold green]¥{max_balance}[/bold green]\n"
+        f"密钥: {selected_key[:15]}...",
+        title="自动切换",
+        border_style="green"
+    ))
     
     # 获取 baseUrl
     base_url = "https://api.siliconflow.cn/"

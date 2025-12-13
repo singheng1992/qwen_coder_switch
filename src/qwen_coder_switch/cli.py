@@ -9,7 +9,11 @@ from .constants import DEFAULT_PROVIDER_CONFIG, DEFAULT_QWEN_CONFIG
 from .config import create_default_provider_config, validate_provider_config
 from .manager import check_and_clean_keys, select_and_switch_key
 
-app = typer.Typer(help="Qwen Coder API Key Manager")
+app = typer.Typer(
+    help="Qwen Coder API Key Manager", 
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]}
+)
 console = Console()
 
 @app.command()
@@ -60,10 +64,10 @@ def main(
         raise typer.Exit(1)
     
     # 3. 检查并清理密钥
-    provider_conf = check_and_clean_keys(config_path)
+    provider_conf, key_stats = check_and_clean_keys(config_path)
     
     # 4. 选择并切换密钥
     qwen_config_path = qwen_config or DEFAULT_QWEN_CONFIG
-    select_and_switch_key(provider_conf, qwen_config_path)
+    select_and_switch_key(key_stats, qwen_config_path)
     
     console.print("\n[bold green]✓ 操作完成![/bold green]")
