@@ -1,7 +1,6 @@
 import requests
 from typing import Optional
 from rich.console import Console
-from .provider import PROVIDER_ENDPOINTS
 
 console = Console()
 
