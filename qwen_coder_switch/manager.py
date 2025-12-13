@@ -41,6 +41,7 @@ def check_and_clean_keys(config_path: Path) -> Tuple[Dict, List[Dict]]:
                 balance_url = provider_config.get("balance_url")
                 balance_field = provider_config.get("balance_field")
                 base_url = provider_config.get("base_url")
+                model_name = provider_config.get("model_name")
 
                 valid_keys_for_provider = []
                 
@@ -64,7 +65,8 @@ def check_and_clean_keys(config_path: Path) -> Tuple[Dict, List[Dict]]:
                             "provider": provider_name,
                             "key": api_key,
                             "balance": balance,
-                            "base_url": base_url
+                            "base_url": base_url,
+                            "model_name": model_name
                         })
                     
                     progress.remove_task(task)
@@ -105,7 +107,8 @@ def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None
     selected_key = best_key_info["key"]
     max_balance = best_key_info["balance"]
     base_url = best_key_info.get("base_url", "")
-    
+    model_name = best_key_info.get("model_name", "")
+
     console.print(Panel(
         f"自动选择余额最高的密钥:\n"
         f"供应商: [bold magenta]{selected_provider}[/bold magenta]\n"
@@ -144,7 +147,8 @@ def select_and_switch_key(key_stats: List[Dict], qwen_config_path: Path) -> None
     qwen_config["security"]["auth"]["selectedType"] = "openai" # Force openai compatible type usually
     qwen_config["security"]["auth"]["apiKey"] = selected_key
     qwen_config["security"]["auth"]["baseUrl"] = base_url
-    
+    qwen_config["model"]["name"] = model_name
+
     # 保存配置
     with open(qwen_config_path, 'w', encoding='utf-8') as f:
         json.dump(qwen_config, f, indent=2, ensure_ascii=False)

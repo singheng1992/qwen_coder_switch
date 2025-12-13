@@ -15,6 +15,7 @@ def create_default_provider_config(path: Path) -> None:
                 "base_url": "https://api.siliconflow.cn/v1",
                 "balance_url": "https://api.siliconflow.cn/v1/user/info",
                 "balance_field": "data.balance",
+                "model_name": "Qwen/Qwen3-VL-235B-A22B-Instruct",
                 "api_keys": [
                     "sk-your-api-key-here"
                 ]
