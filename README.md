@@ -1,5 +1,7 @@
 # qwen_coder_switch
 
+实现 qwen-coder-cli 的密钥根据用户自定义的密钥池自动切换
+
 ## 安装
 
 ```
@@ -8,6 +10,20 @@ git clone https://github.com/singheng1992/qwen_coder_switch.git
 cd qwen_coder_switch
 
 pip install -e .
+```
+
+## 修改配置
+
+配置文件路径：~/.qwen_coder_switch/provider.yml
+
+## 用法
+
+```
+# 读取默认配置文件
+qwen_coder_switch
+
+# 或者指定配置文件路径
+qwen_coder_switch -c /your_path/provider.yml
 ```
 
 # 版本说明
