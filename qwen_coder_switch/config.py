@@ -13,8 +13,6 @@ def create_default_provider_config(path: Path) -> None:
         "provider": {
             "siliconflow": {
                 "base_url": "https://api.siliconflow.cn/v1",
-                "balance_url": "https://api.siliconflow.cn/v1/user/info",
-                "balance_field": "data.balance",
                 "model_name": "Qwen/Qwen3-VL-235B-A22B-Instruct",
                 "api_keys": [
                     "sk-your-api-key-here"
@@ -46,7 +44,7 @@ def validate_provider_config(config: Dict) -> bool:
             console.print(f"[red]✗[/red] 配置文件格式错误: '{provider_name}' 的配置应该是一个字典")
             return False
         
-        required_fields = ["base_url", "balance_url", "balance_field", "api_keys"]
+        required_fields = ["base_url", "api_keys"]
         for field in required_fields:
             if field not in provider_config:
                 console.print(f"[red]✗[/red] 配置文件格式错误: '{provider_name}' 缺少必须的字段 '{field}'")
@@ -74,3 +72,33 @@ def backup_config_file(path: Path) -> None:
     backup_path = path.parent / f"{path.stem}_backup_{timestamp}{path.suffix}"
     shutil.copy2(path, backup_path)
     console.print(f"[blue]ℹ[/blue] 已备份配置文件到: {backup_path}")
+
+
+def restore_from_backup(path: Path) -> bool:
+    """从最近的备份恢复配置文件"""
+    if not path.parent.exists():
+        console.print(f"[red]✗[/red] 目录不存在: {path.parent}")
+        return False
+        
+    # 搜索备份文件
+    # 假设备份格式: original_name_backup_YYYYMMDD_HHMMSS.ext
+    pattern = f"{path.stem}_backup_*{path.suffix}"
+    backups = list(path.parent.glob(pattern))
+    
+    if not backups:
+        console.print(f"[yellow]⚠[/yellow] 未找到 {path.name} 的备份文件")
+        return False
+        
+    # 按文件名排序 (时间戳格式保证了排序正确性)
+    backups.sort(key=lambda x: x.name)
+    latest_backup = backups[-1]
+    
+    try:
+        shutil.copy2(latest_backup, path)
+        console.print(f"[green]✓[/green] 已从备份恢复配置文件")
+        console.print(f"  源备份: {latest_backup.name}")
+        console.print(f"  目标: {path}")
+        return True
+    except Exception as e:
+        console.print(f"[red]✗[/red] 恢复失败: {str(e)}")
+        return False
